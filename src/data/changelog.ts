@@ -2,6 +2,24 @@ import type { ChangelogRelease } from '../types'
 
 export const changelog: ChangelogRelease[] = [
   {
+    version: '0.3.0',
+    date: '2026-09-03',
+    title: 'Media Generation',
+    added: [
+      'Image generation using Gemini 3.1 Flash Lite Image / Nano Banana 2 Lite.',
+      'Music generation using Lyria 3 Pro.',
+      'Create Image option in the composer "+" menu.',
+      'Create Music option in the composer "+" menu.',
+      'Inline generated images in conversations.',
+      'Inline playback of generated music.',
+      'Download support for generated images.',
+      'Download support for generated audio.',
+      'Local persistence for generated media.',
+      'Media-specific generation and error states.',
+      'Support for image and audio content within the conversation data model.'
+    ]
+  },
+  {
     version: '0.2.1',
     date: '2026-09-03',
     title: 'Markdown Rendering & Clear Chat',

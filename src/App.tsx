@@ -1,10 +1,10 @@
 import { useEffect, useRef, useState } from 'react'
 import { APP_VERSION, MODEL_NAME } from './config'
-import { Composer } from './components/Composer'
+import { Composer, type ComposerMode } from './components/Composer'
 import { MessageList } from './components/MessageList'
 import { Settings } from './components/Settings'
 import { TopBar } from './components/TopBar'
-import { streamReply } from './services/gemini'
+import { generateImage, generateMusic, streamReply } from './services/gemini'
 import { getApiKey } from './services/settings'
 import { clearMessages, loadMessages, saveMessage } from './services/storage'
 import type { Message } from './types'
@@ -16,6 +16,8 @@ export default function App() {
   const [apiKey, setApiKey] = useState(getApiKey)
   const [view, setView] = useState<View>('chat')
   const [generating, setGenerating] = useState(false)
+  const [generatingType, setGeneratingType] = useState<ComposerMode>('chat')
+  const [composerMode, setComposerMode] = useState<ComposerMode>('chat')
   const [searchGrounding, setSearchGrounding] = useState(false)
   const [showClearConfirm, setShowClearConfirm] = useState(false)
   const [error, setError] = useState('')
@@ -25,15 +27,88 @@ export default function App() {
   useEffect(() => { loadMessages().then(setMessages).catch(() => setError('Could not load your saved conversation.')) }, [])
   useEffect(() => { const timer = window.setInterval(() => setClock(new Date()), 1000); return () => window.clearInterval(timer) }, [])
 
-  async function send(content: string) {
+  async function send(content: string, mode: ComposerMode) {
     if (!apiKey) { setView('settings'); return }
     setError('')
     const userMessage: Message = { id: crypto.randomUUID(), role: 'user', content, createdAt: Date.now() }
-    const assistantMessage: Message = { id: crypto.randomUUID(), role: 'assistant', content: '', createdAt: Date.now() + 1 }
-    setMessages((current) => [...current, userMessage, assistantMessage])
-    setGenerating(true)
+    const assistantMessageId = crypto.randomUUID()
     const controller = new AbortController()
     abortRef.current = controller
+
+    if (mode === 'image') {
+      const assistantMessage: Message = {
+        id: assistantMessageId,
+        role: 'assistant',
+        content: '',
+        mediaType: 'image',
+        createdAt: Date.now() + 1
+      }
+      setMessages((current) => [...current, userMessage, assistantMessage])
+      setGenerating(true)
+      setGeneratingType('image')
+      setComposerMode('chat')
+
+      try {
+        await saveMessage(userMessage)
+        const media = await generateImage(apiKey, content, controller.signal)
+        const completedMessage: Message = { ...assistantMessage, media, content: '' }
+        setMessages((current) => current.map((msg) => (msg.id === assistantMessageId ? completedMessage : msg)))
+        await saveMessage(completedMessage)
+      } catch (cause) {
+        if (!(cause instanceof DOMException && cause.name === 'AbortError')) {
+          setError(cause instanceof Error ? cause.message : 'Image generation failed. Please check your prompt and API key.')
+        }
+        setMessages((current) => current.filter((msg) => msg.id !== assistantMessageId))
+      } finally {
+        setGenerating(false)
+        abortRef.current = null
+      }
+      return
+    }
+
+    if (mode === 'music') {
+      const assistantMessage: Message = {
+        id: assistantMessageId,
+        role: 'assistant',
+        content: '',
+        mediaType: 'audio',
+        createdAt: Date.now() + 1
+      }
+      setMessages((current) => [...current, userMessage, assistantMessage])
+      setGenerating(true)
+      setGeneratingType('music')
+      setComposerMode('chat')
+
+      try {
+        await saveMessage(userMessage)
+        const media = await generateMusic(apiKey, content, controller.signal)
+        const completedMessage: Message = { ...assistantMessage, media, content: '' }
+        setMessages((current) => current.map((msg) => (msg.id === assistantMessageId ? completedMessage : msg)))
+        await saveMessage(completedMessage)
+      } catch (cause) {
+        if (!(cause instanceof DOMException && cause.name === 'AbortError')) {
+          setError(cause instanceof Error ? cause.message : 'Music generation failed. Please check your prompt and API key.')
+        }
+        setMessages((current) => current.filter((msg) => msg.id !== assistantMessageId))
+      } finally {
+        setGenerating(false)
+        abortRef.current = null
+      }
+      return
+    }
+
+    // Normal chat mode with streaming
+    const assistantMessage: Message = {
+      id: assistantMessageId,
+      role: 'assistant',
+      content: '',
+      mediaType: 'text',
+      createdAt: Date.now() + 1
+    }
+    setMessages((current) => [...current, userMessage, assistantMessage])
+    setGenerating(true)
+    setGeneratingType('chat')
+
     try {
       await saveMessage(userMessage)
       let answer = ''
@@ -43,9 +118,14 @@ export default function App() {
       }
       await saveMessage({ ...assistantMessage, content: answer })
     } catch (cause) {
-      if (!(cause instanceof DOMException && cause.name === 'AbortError')) setError(cause instanceof Error ? cause.message : 'The request failed. Check your API key and try again.')
+      if (!(cause instanceof DOMException && cause.name === 'AbortError')) {
+        setError(cause instanceof Error ? cause.message : 'The request failed. Check your API key and try again.')
+      }
       setMessages((current) => current.filter((message) => message.id !== assistantMessage.id))
-    } finally { setGenerating(false); abortRef.current = null }
+    } finally {
+      setGenerating(false)
+      abortRef.current = null
+    }
   }
 
   async function handleClearChat() {
@@ -86,7 +166,7 @@ export default function App() {
           {clock.toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })}
         </time>
         <section className="chat-shell">
-          <MessageList messages={messages} generating={generating} />
+          <MessageList messages={messages} generating={generating} generatingType={generatingType} />
           {error && <div className="error" role="alert">{error}</div>}
           {!apiKey && (
             <button className="setup-hint" onClick={() => setView('settings')}>
@@ -96,6 +176,8 @@ export default function App() {
           <Composer
             disabled={!apiKey}
             generating={generating}
+            mode={composerMode}
+            onModeChange={setComposerMode}
             searchGrounding={searchGrounding}
             onToggleSearchGrounding={setSearchGrounding}
             onSend={send}
@@ -109,7 +191,7 @@ export default function App() {
         <div className="modal-backdrop" onClick={() => setShowClearConfirm(false)}>
           <div className="modal-card" onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true" aria-labelledby="clear-title">
             <h2 id="clear-title">Clear chat?</h2>
-            <p>This will permanently delete the current conversation from this device.</p>
+            <p>This will permanently delete the current conversation and all generated media from this device.</p>
             <div className="modal-actions">
               <button type="button" className="secondary-button" onClick={() => setShowClearConfirm(false)}>
                 Cancel
@@ -124,3 +206,4 @@ export default function App() {
     </main>
   )
 }
+

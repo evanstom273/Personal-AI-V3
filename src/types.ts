@@ -1,10 +1,21 @@
 export type Role = 'user' | 'assistant'
+export type MediaType = 'text' | 'image' | 'audio'
+
+export interface MediaMetadata {
+  type: 'image' | 'audio'
+  dataUrl: string
+  mimeType: string
+  fileName?: string
+  prompt?: string
+}
 
 export interface Message {
   id: string
   role: Role
   content: string
   createdAt: number
+  mediaType?: MediaType
+  media?: MediaMetadata
 }
 
 export interface Conversation {
