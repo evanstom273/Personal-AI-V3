@@ -2,6 +2,19 @@ import type { ChangelogRelease } from '../types'
 
 export const changelog: ChangelogRelease[] = [
   {
+    version: '0.4.1',
+    date: '2026-09-03',
+    title: 'Mobile Settings Fix',
+    fixed: [
+      'Fixed Settings layout being squeezed into an unusably narrow panel on mobile.',
+      'Fixed clipped Settings headings and controls.',
+      'Fixed excessive wrapping of model and settings information.',
+      'Fixed Changelog controls extending beyond the mobile viewport.',
+      'Improved responsive behaviour of Settings and Changelog views.',
+      'Prevented horizontal overflow in mobile Settings.'
+    ]
+  },
+  {
     version: '0.4.0',
     date: '2026-09-03',
     title: 'Interface Refresh',
