@@ -25,13 +25,15 @@ jobs:
         with:
           node-version: 22
           cache: npm
+      - name: Configure Pages
+        id: pages
+        uses: actions/configure-pages@v5
       - name: Install
         run: npm ci
       - name: Build
         env:
-          PAGES_BASE: /Personal-AI-V3/
+          PAGES_BASE: ${{ steps.pages.outputs.base_path || '/Personal-AI-V3/' }}
         run: npm run build
-      - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:
           path: dist

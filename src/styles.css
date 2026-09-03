@@ -23,13 +23,14 @@ button { cursor: pointer }
 .empty-mark { display: grid; place-items: center; width: 48px; height: 48px; margin: auto; border-radius: 14px; background: #fff0e9; color: #f67e57; font-size: 26px }
 .empty-state h1 { margin: 18px 0 7px; font-size: 28px; letter-spacing: -.05em }
 .empty-state p, .muted { color: #9299a1; font-size: 13px; line-height: 1.5 }
-.composer { position: sticky; bottom: 0; z-index: 1; flex: 0 0 auto; margin: 16px 42px 0; padding-bottom: max(26px, env(safe-area-inset-bottom)); background: #fbfcfd }
+.composer { flex: 0 0 auto; margin: 12px 42px 0; padding-bottom: max(24px, env(safe-area-inset-bottom)); background: #fbfcfd }
+.composer-inner { position: relative; width: 100% }
 .composer textarea { display: block; width: 100%; min-height: 56px; padding: 16px 78px 16px 16px; resize: vertical; border: 1px solid #dfe3e7; border-radius: 10px; background: white; color: #27303a; outline: none; box-shadow: 0 5px 18px #26384a08 }
 .composer textarea:focus, .modal input:focus { border-color: #f3aa92 }
 .composer button { position: absolute; right: 10px; top: 10px; min-width: 52px; height: 36px; border: 0; border-radius: 8px; background: #f67e57; color: white; font-size: 12px }
 .composer button:disabled { opacity: .35; cursor: not-allowed }
 .error { margin: 0 42px 12px; padding: 10px 13px; border-radius: 7px; color: #a54f39; background: #fff0eb; font-size: 12px }
-.setup-hint { flex: 0 0 auto; align-self: center; margin: 0 auto 20px; border: 0; background: transparent; color: #f67e57; font-size: 12px }
+.setup-hint { flex: 0 0 auto; align-self: center; margin: 8px auto 0; border: 0; background: transparent; color: #f67e57; font-size: 12px }
 .panel { width: min(620px, calc(100% - 40px)); max-height: calc(100dvh - 48px); overflow-y: auto; margin: auto; padding: 28px; background: white; border: 1px solid #e5e8eb; border-radius: 14px; box-shadow: 0 20px 60px #1d28330d }
 .panel-heading { display: flex; align-items: center; gap: 12px; border-bottom: 1px solid #edf0f2; padding-bottom: 18px }
 .panel h1 { margin: 0; font-size: 23px }
