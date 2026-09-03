@@ -6,7 +6,7 @@ import { Settings } from './components/Settings'
 import { TopBar } from './components/TopBar'
 import { generateImage, generateMusic, streamReply } from './services/gemini'
 import { getApiKey } from './services/settings'
-import { clearMessages, loadMessages, saveMessage } from './services/storage'
+import { deleteMessages, clearMessages, loadMessages, saveMessage } from './services/storage'
 import type { Message } from './types'
 
 type View = 'chat' | 'settings' | 'changelog'
@@ -128,6 +128,75 @@ export default function App() {
     }
   }
 
+  async function handleEditMessage(userMessageId: string, newContent: string) {
+    if (!apiKey) { setView('settings'); return }
+    const index = messages.findIndex((m) => m.id === userMessageId)
+    if (index === -1) return
+
+    // Discard any subsequent messages from storage to maintain coherence
+    const previousMessages = messages.slice(0, index)
+    const discardedMessages = messages.slice(index)
+    const discardedIds = discardedMessages.map((m) => m.id)
+    await deleteMessages(discardedIds).catch(() => {})
+
+    const updatedUserMessage: Message = {
+      ...messages[index],
+      content: newContent,
+      createdAt: Date.now()
+    }
+    const assistantMessageId = crypto.randomUUID()
+    const assistantMessage: Message = {
+      id: assistantMessageId,
+      role: 'assistant',
+      content: '',
+      mediaType: 'text',
+      createdAt: Date.now() + 1
+    }
+
+    setMessages([...previousMessages, updatedUserMessage, assistantMessage])
+    setGenerating(true)
+    setGeneratingType('chat')
+    setError('')
+
+    const controller = new AbortController()
+    abortRef.current = controller
+
+    try {
+      await saveMessage(updatedUserMessage)
+      let answer = ''
+      for await (const chunk of streamReply(apiKey, [...previousMessages, updatedUserMessage], controller.signal, searchGrounding)) {
+        answer += chunk
+        setMessages((current) => current.map((msg) => msg.id === assistantMessageId ? { ...msg, content: answer } : msg))
+      }
+      await saveMessage({ ...assistantMessage, content: answer })
+    } catch (cause) {
+      if (!(cause instanceof DOMException && cause.name === 'AbortError')) {
+        setError(cause instanceof Error ? cause.message : 'The request failed. Check your API key and try again.')
+      }
+      setMessages((current) => current.filter((msg) => msg.id !== assistantMessageId))
+    } finally {
+      setGenerating(false)
+      abortRef.current = null
+    }
+  }
+
+  async function handleDeleteMessage(userMessageId: string) {
+    const index = messages.findIndex((m) => m.id === userMessageId)
+    if (index === -1) return
+
+    const idsToDelete = [userMessageId]
+    if (index + 1 < messages.length && messages[index + 1].role === 'assistant') {
+      idsToDelete.push(messages[index + 1].id)
+    }
+
+    setMessages((current) => current.filter((m) => !idsToDelete.includes(m.id)))
+    try {
+      await deleteMessages(idsToDelete)
+    } catch {
+      setError('Could not delete the message from storage.')
+    }
+  }
+
   async function handleClearChat() {
     if (abortRef.current) {
       abortRef.current.abort()
@@ -163,7 +232,13 @@ export default function App() {
           hasMessages={messages.length > 0}
         />
         <section className="chat-shell">
-          <MessageList messages={messages} generating={generating} generatingType={generatingType} />
+          <MessageList
+            messages={messages}
+            generating={generating}
+            generatingType={generatingType}
+            onEdit={handleEditMessage}
+            onDelete={handleDeleteMessage}
+          />
           {error && <div className="error" role="alert">{error}</div>}
           {!apiKey && (
             <button className="setup-hint" onClick={() => setView('settings')}>

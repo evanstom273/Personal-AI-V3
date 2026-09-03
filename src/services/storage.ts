@@ -31,6 +31,29 @@ export async function saveMessage(message: Message): Promise<void> {
   })
 }
 
+export async function deleteMessage(id: string): Promise<void> {
+  const db = await openDatabase()
+  return new Promise((resolve, reject) => {
+    const request = db.transaction(STORE_NAME, 'readwrite').objectStore(STORE_NAME).delete(id)
+    request.onsuccess = () => resolve()
+    request.onerror = () => reject(request.error ?? new Error('Could not delete the message.'))
+  })
+}
+
+export async function deleteMessages(ids: string[]): Promise<void> {
+  if (!ids.length) return
+  const db = await openDatabase()
+  return new Promise((resolve, reject) => {
+    const transaction = db.transaction(STORE_NAME, 'readwrite')
+    const store = transaction.objectStore(STORE_NAME)
+    for (const id of ids) {
+      store.delete(id)
+    }
+    transaction.oncomplete = () => resolve()
+    transaction.onerror = () => reject(transaction.error ?? new Error('Could not delete messages.'))
+  })
+}
+
 export async function clearMessages(): Promise<void> {
   const db = await openDatabase()
   return new Promise((resolve, reject) => {
@@ -41,3 +64,4 @@ export async function clearMessages(): Promise<void> {
 }
 
 export const conversationId = CONVERSATION_ID
+
