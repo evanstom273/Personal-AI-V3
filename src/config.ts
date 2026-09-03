@@ -1,4 +1,4 @@
-export const APP_VERSION = '0.3.0'
+export const APP_VERSION = '0.4.0'
 export const MODEL_NAME = 'gemini-3.1-flash-lite'
 export const DISPLAY_MODEL = 'Gemini 3.1 Flash-Lite'
 export const IMAGE_MODEL_NAME = 'gemini-3.1-flash-lite-image'

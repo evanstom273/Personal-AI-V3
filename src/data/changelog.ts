@@ -2,6 +2,27 @@ import type { ChangelogRelease } from '../types'
 
 export const changelog: ChangelogRelease[] = [
   {
+    version: '0.4.0',
+    date: '2026-09-03',
+    title: 'Interface Refresh',
+    added: [
+      'Changelog access from Settings.'
+    ],
+    changed: [
+      'Redesigned the application top bar.',
+      'Grouped Personal AI, version and live date/time on the left side of the header.',
+      'Replaced text-based Clear Chat and Settings controls with compact icon buttons.',
+      'Moved Changelog access from the top bar into Settings.',
+      'Added clearer visual separation between user and Personal AI messages.',
+      'User messages now use compact right-aligned message bubbles.',
+      'Personal AI responses now use a cleaner left-aligned conversational layout.',
+      'Improved conversation spacing and readability.',
+      'Refined generated media presentation.',
+      'Refined composer spacing and mobile presentation.',
+      'Improved responsive behaviour of the top bar on narrow screens.'
+    ]
+  },
+  {
     version: '0.3.0',
     date: '2026-09-03',
     title: 'Media Generation',

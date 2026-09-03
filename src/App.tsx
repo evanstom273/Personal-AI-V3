@@ -147,7 +147,7 @@ export default function App() {
   if (view !== 'chat') {
     return (
       <main className="app-shell">
-        <TopBar onSettings={() => setView('settings')} onChangelog={() => setView('changelog')} />
+        <TopBar clock={clock} onSettings={() => setView('settings')} />
         <Settings apiKey={apiKey} onSaved={setApiKey} onClose={() => setView('chat')} showChangelog={view === 'changelog'} />
       </main>
     )
@@ -157,14 +157,11 @@ export default function App() {
     <main className="app-shell">
       <div className="chat-area">
         <TopBar
+          clock={clock}
           onSettings={() => setView('settings')}
-          onChangelog={() => setView('changelog')}
           onClearChat={() => setShowClearConfirm(true)}
           hasMessages={messages.length > 0}
         />
-        <time className="clock" dateTime={clock.toISOString()}>
-          {clock.toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })}
-        </time>
         <section className="chat-shell">
           <MessageList messages={messages} generating={generating} generatingType={generatingType} />
           {error && <div className="error" role="alert">{error}</div>}
