@@ -7,12 +7,12 @@ export const changelog: ChangelogRelease[] = [
     title: 'Search Grounding & Composer Menu',
     added: [
       'Composer "+" menu with actions and quick toggles.',
-      'Google Search Grounding toggle powered by Gemini 2 search.',
+      'Google Search Grounding toggle powered by Google Search.',
       'Interactive search status badge indicator in the message composer.',
       'Keyboard and click-outside dismissal for composer popover menu.'
     ],
     changed: [
-      'Updated default AI model to Gemini 2.5 Flash-Lite.',
+      'Configured Google Search grounding with Gemini 3.1 Flash-Lite.',
       'Enhanced mobile composer viewport anchoring and safe area handling.',
       'Optimized GitHub Pages automated deployment workflow.'
     ]
