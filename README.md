@@ -10,3 +10,5 @@ npm run dev
 ```
 
 Open Settings in the app and add a Gemini API key. Conversations are stored in IndexedDB; the key and selected model are stored in localStorage.
+
+The production build is generated with `npm run build`.
