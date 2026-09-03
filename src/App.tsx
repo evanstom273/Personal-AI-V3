@@ -215,7 +215,7 @@ export default function App() {
 
   if (view !== 'chat') {
     return (
-      <main className="app-shell">
+      <main className="app-shell settings-shell">
         <TopBar clock={clock} onSettings={() => setView('settings')} />
         <Settings apiKey={apiKey} onSaved={setApiKey} onClose={() => setView('chat')} showChangelog={view === 'changelog'} />
       </main>
