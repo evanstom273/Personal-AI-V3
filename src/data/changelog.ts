@@ -2,6 +2,20 @@ import type { ChangelogRelease } from '../types'
 
 export const changelog: ChangelogRelease[] = [
   {
+    version: '0.2.1',
+    date: '2026-09-03',
+    title: 'Markdown Rendering & Clear Chat',
+    added: [
+      'Added the ability to clear the current conversation with confirmation.'
+    ],
+    fixed: [
+      'Assistant responses now render Markdown instead of displaying raw Markdown syntax.',
+      'Improved rendering of headings, emphasis, lists, links, blockquotes, code and other common Markdown content.',
+      'Markdown rendering works with streamed Gemini responses.',
+      'Improved mobile presentation of Markdown content such as code blocks and tables.'
+    ]
+  },
+  {
     version: '0.2.0',
     date: '2026-09-03',
     title: 'Search Grounding & Composer Menu',

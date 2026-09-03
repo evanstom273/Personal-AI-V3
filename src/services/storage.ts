@@ -31,4 +31,13 @@ export async function saveMessage(message: Message): Promise<void> {
   })
 }
 
+export async function clearMessages(): Promise<void> {
+  const db = await openDatabase()
+  return new Promise((resolve, reject) => {
+    const request = db.transaction(STORE_NAME, 'readwrite').objectStore(STORE_NAME).clear()
+    request.onsuccess = () => resolve()
+    request.onerror = () => reject(request.error ?? new Error('Could not clear the conversation.'))
+  })
+}
+
 export const conversationId = CONVERSATION_ID
