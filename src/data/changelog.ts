@@ -2,6 +2,30 @@ import type { ChangelogRelease } from '../types'
 
 export const changelog: ChangelogRelease[] = [
   {
+    version: '0.5.0',
+    date: '2026-09-03',
+    title: 'Memory Foundation',
+    added: [
+      'Persistent long-term Memory Archive.',
+      'Linked Markdown-style memory notes.',
+      'Wiki-style links between memories.',
+      'Automatic backlinks.',
+      'Memory Archive search.',
+      'Manual memory creation, editing, renaming and deletion.',
+      'Memory categories and tags.',
+      'Explicit conversational remember functionality.',
+      'Relevant memory retrieval during normal chat.',
+      'Memory usage indicators beneath responses.',
+      'Portable Memory Archive Markdown export.',
+      'Hamburger navigation menu with Memory Archive and Settings.'
+    ],
+    changed: [
+      'Replaced the Settings cog in the top bar with a hamburger navigation menu.',
+      'Personal AI can retrieve relevant persistent knowledge without injecting the entire archive into every request.',
+      'Clear Chat and long-term memory are explicitly separate systems.'
+    ]
+  },
+  {
     version: '0.4.1',
     date: '2026-09-03',
     title: 'Mobile Settings Fix',

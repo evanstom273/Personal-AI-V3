@@ -3,18 +3,22 @@ import { APP_VERSION, MODEL_NAME } from './config'
 import { Composer, type ComposerMode } from './components/Composer'
 import { MessageList } from './components/MessageList'
 import { Settings } from './components/Settings'
+import { MemoryArchive } from './components/MemoryArchive'
 import { TopBar } from './components/TopBar'
-import { generateImage, generateMusic, streamReply } from './services/gemini'
+import { generateImage, generateMusic, handleExplicitMemory, streamReply } from './services/gemini'
 import { getApiKey } from './services/settings'
 import { deleteMessages, clearMessages, loadMessages, saveMessage } from './services/storage'
 import type { Message } from './types'
+import { indexedDbMemoryRepository } from './services/memoryStorage'
+import { isMemoryIntent, retrieveMemories } from './services/memory'
 
-type View = 'chat' | 'settings' | 'changelog'
+type View = 'chat' | 'settings' | 'changelog' | 'memory'
 
 export default function App() {
   const [messages, setMessages] = useState<Message[]>([])
   const [apiKey, setApiKey] = useState(getApiKey)
   const [view, setView] = useState<View>('chat')
+  const [selectedMemoryId, setSelectedMemoryId] = useState('')
   const [generating, setGenerating] = useState(false)
   const [generatingType, setGeneratingType] = useState<ComposerMode>('chat')
   const [composerMode, setComposerMode] = useState<ComposerMode>('chat')
@@ -112,11 +116,21 @@ export default function App() {
     try {
       await saveMessage(userMessage)
       let answer = ''
-      for await (const chunk of streamReply(apiKey, [...messages, userMessage], controller.signal, searchGrounding)) {
-        answer += chunk
-        setMessages((current) => current.map((message) => message.id === assistantMessage.id ? { ...message, content: answer } : message))
+      let memoryUsed: string[] = []
+      if (isMemoryIntent(content)) {
+        const memoryResult = await handleExplicitMemory(apiKey, [...messages, userMessage], indexedDbMemoryRepository, controller.signal)
+        answer = memoryResult.summary
+        memoryUsed = memoryResult.usedNotes.map((note) => note.title)
+      } else {
+        const memories = await retrieveMememoriesSafely(content)
+        memoryUsed = memories.map((note) => note.title)
+        for await (const chunk of streamReply(apiKey, [...messages, userMessage], controller.signal, searchGrounding, memories)) {
+          answer += chunk
+          setMessages((current) => current.map((message) => message.id === assistantMessage.id ? { ...message, content: answer } : message))
+        }
       }
-      await saveMessage({ ...assistantMessage, content: answer })
+      setMessages((current) => current.map((message) => message.id === assistantMessage.id ? { ...message, content: answer, memoryUsed } : message))
+      await saveMessage({ ...assistantMessage, content: answer, memoryUsed })
     } catch (cause) {
       if (!(cause instanceof DOMException && cause.name === 'AbortError')) {
         setError(cause instanceof Error ? cause.message : 'The request failed. Check your API key and try again.')
@@ -126,6 +140,10 @@ export default function App() {
       setGenerating(false)
       abortRef.current = null
     }
+  }
+
+  async function retrieveMememoriesSafely(content: string) {
+    try { return retrieveMemories(content, await indexedDbMemoryRepository.list()) } catch { return [] }
   }
 
   async function handleEditMessage(userMessageId: string, newContent: string) {
@@ -213,10 +231,12 @@ export default function App() {
     }
   }
 
+  if (view === 'memory') return <MemoryArchive onClose={() => setView('chat')} initialNoteId={selectedMemoryId} />
+
   if (view !== 'chat') {
     return (
       <main className="app-shell settings-shell">
-        <TopBar clock={clock} onSettings={() => setView('settings')} />
+        <TopBar clock={clock} onMemory={() => setView('memory')} onSettings={() => setView('settings')} />
         <Settings apiKey={apiKey} onSaved={setApiKey} onClose={() => setView('chat')} showChangelog={view === 'changelog'} />
       </main>
     )
@@ -227,6 +247,7 @@ export default function App() {
       <div className="chat-area">
         <TopBar
           clock={clock}
+          onMemory={() => setView('memory')}
           onSettings={() => setView('settings')}
           onClearChat={() => setShowClearConfirm(true)}
           hasMessages={messages.length > 0}
@@ -238,6 +259,7 @@ export default function App() {
             generatingType={generatingType}
             onEdit={handleEditMessage}
             onDelete={handleDeleteMessage}
+            onOpenMemory={(title) => { setSelectedMemoryId(title); setView('memory') }}
           />
           {error && <div className="error" role="alert">{error}</div>}
           {!apiKey && (

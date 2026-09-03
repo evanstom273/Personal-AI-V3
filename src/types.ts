@@ -16,6 +16,18 @@ export interface Message {
   createdAt: number
   mediaType?: MediaType
   media?: MediaMetadata
+  memoryUsed?: string[]
+}
+
+export interface MemoryNote {
+  id: string
+  title: string
+  content: string
+  createdAt: number
+  updatedAt: number
+  tags: string[]
+  category: string
+  metadata?: Record<string, unknown>
 }
 
 export interface Conversation {

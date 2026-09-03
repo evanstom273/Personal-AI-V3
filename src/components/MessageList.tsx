@@ -9,6 +9,7 @@ interface MessageListProps {
   generatingType?: 'chat' | 'image' | 'music'
   onEdit?: (messageId: string, newContent: string) => void
   onDelete?: (messageId: string) => void
+  onOpenMemory?: (title: string) => void
 }
 
 export function MessageList({
@@ -16,7 +17,8 @@ export function MessageList({
   generating,
   generatingType = 'chat',
   onEdit,
-  onDelete
+  onDelete,
+  onOpenMemory
 }: MessageListProps) {
   const endRef = useRef<HTMLDivElement>(null)
   const [lightboxImage, setLightboxImage] = useState<{ src: string; alt: string; fileName: string } | null>(null)
@@ -309,6 +311,7 @@ export function MessageList({
                         <span className="action-btn-label">{isCopied ? 'Copied' : 'Copy'}</span>
                       </button>
                     </div>
+                    {!!message.memoryUsed?.length && <div className="memory-used">Memory used: {message.memoryUsed.map((title) => <button type="button" key={title} onClick={() => onOpenMemory?.(title)}>{title}</button>)}</div>}
                   </div>
                 ) : generating ? (
                   generatingType === 'image' ? (
@@ -364,6 +367,5 @@ export function MessageList({
     </>
   )
 }
-
 
 
