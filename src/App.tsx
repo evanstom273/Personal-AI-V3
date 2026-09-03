@@ -16,6 +16,7 @@ export default function App() {
   const [apiKey, setApiKey] = useState(getApiKey)
   const [view, setView] = useState<View>('chat')
   const [generating, setGenerating] = useState(false)
+  const [searchGrounding, setSearchGrounding] = useState(false)
   const [error, setError] = useState('')
   const [clock, setClock] = useState(() => new Date())
   const abortRef = useRef<AbortController | null>(null)
@@ -35,7 +36,7 @@ export default function App() {
     try {
       await saveMessage(userMessage)
       let answer = ''
-      for await (const chunk of streamReply(apiKey, [...messages, userMessage], controller.signal)) {
+      for await (const chunk of streamReply(apiKey, [...messages, userMessage], controller.signal, searchGrounding)) {
         answer += chunk
         setMessages((current) => current.map((message) => message.id === assistantMessage.id ? { ...message, content: answer } : message))
       }
@@ -47,5 +48,5 @@ export default function App() {
   }
 
   if (view !== 'chat') return <main className="app-shell"><TopBar onSettings={() => setView('settings')} onChangelog={() => setView('changelog')} /><Settings apiKey={apiKey} onSaved={setApiKey} onClose={() => setView('chat')} showChangelog={view === 'changelog'} /></main>
-  return <main className="app-shell"><div className="chat-area"><TopBar onSettings={() => setView('settings')} onChangelog={() => setView('changelog')} /><time className="clock" dateTime={clock.toISOString()}>{clock.toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })}</time><section className="chat-shell"><MessageList messages={messages} generating={generating} />{error && <div className="error" role="alert">{error}</div>}{!apiKey && <button className="setup-hint" onClick={() => setView('settings')}>Add your Gemini API key in Settings to start chatting.</button>}<Composer disabled={!apiKey} generating={generating} onSend={send} onStop={() => abortRef.current?.abort()} /></section><span className="sr-only">Personal AI version {APP_VERSION}, model {MODEL_NAME}</span></div></main>
+  return <main className="app-shell"><div className="chat-area"><TopBar onSettings={() => setView('settings')} onChangelog={() => setView('changelog')} /><time className="clock" dateTime={clock.toISOString()}>{clock.toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })}</time><section className="chat-shell"><MessageList messages={messages} generating={generating} />{error && <div className="error" role="alert">{error}</div>}{!apiKey && <button className="setup-hint" onClick={() => setView('settings')}>Add your Gemini API key in Settings to start chatting.</button>}<Composer disabled={!apiKey} generating={generating} searchGrounding={searchGrounding} onToggleSearchGrounding={setSearchGrounding} onSend={send} onStop={() => abortRef.current?.abort()} /></section><span className="sr-only">Personal AI version {APP_VERSION}, model {MODEL_NAME}</span></div></main>
 }

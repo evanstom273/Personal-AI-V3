@@ -2,6 +2,22 @@ import type { ChangelogRelease } from '../types'
 
 export const changelog: ChangelogRelease[] = [
   {
+    version: '0.2.0',
+    date: '2026-09-03',
+    title: 'Search Grounding & Composer Menu',
+    added: [
+      'Composer "+" menu with actions and quick toggles.',
+      'Google Search Grounding toggle powered by Gemini 2 search.',
+      'Interactive search status badge indicator in the message composer.',
+      'Keyboard and click-outside dismissal for composer popover menu.'
+    ],
+    changed: [
+      'Updated default AI model to Gemini 2.5 Flash-Lite.',
+      'Enhanced mobile composer viewport anchoring and safe area handling.',
+      'Optimized GitHub Pages automated deployment workflow.'
+    ]
+  },
+  {
     version: '0.1.0',
     date: '2026-09-03',
     title: 'Initial Chat',
