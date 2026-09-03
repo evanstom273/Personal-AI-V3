@@ -3,7 +3,7 @@ import JSZip from 'jszip'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import type { MemoryNote } from '../types'
-import { MEMORY_SOFT_LIMIT, MEMORY_WARNING_LIMIT, extractWikiLinks, getBacklinks, normalizeTitle, noteToMarkdown, retrieveMemories, replaceWikiLinkTitle } from '../services/memory'
+import { MEMORY_SOFT_LIMIT, MEMORY_WARNING_LIMIT, extractWikiLinks, getBacklinks, normalizeTitle, noteToMarkdown, retrieveMemories } from '../services/memory'
 import { indexedDbMemoryRepository } from '../services/memoryStorage'
 
 interface MemoryArchiveProps { onClose: () => void; initialNoteId?: string }
@@ -49,22 +49,17 @@ export function MemoryArchive({ onClose, initialNoteId }: MemoryArchiveProps) {
     if (!draft.content.trim()) { setError('A memory note needs some content.'); return }
     const duplicate = notes.find((note) => note.id !== draft.id && normalizeTitle(note.title) === normalizeTitle(draft.title))
     if (duplicate) { setError('Another note already uses that title.'); return }
-    const wasRename = selected && selected.title !== draft.title
     try {
       const next = { ...draft, title: draft.title.trim(), category: draft.category.trim() || 'General', tags: [...new Set(draft.tags.map((tag) => tag.trim()).filter(Boolean))], updatedAt: Date.now() }
-      await indexedDbMemoryRepository.save(next)
-      if (wasRename) {
-        for (const note of notes) {
-          if (note.id !== next.id && note.content.includes('[[')) await indexedDbMemoryRepository.save({ ...note, content: replaceWikiLinkTitle(note.content, selected.title, next.title), updatedAt: Date.now() })
-        }
-      }
+      const result = await indexedDbMemoryRepository.applyMutations([selected ? { action: 'update', id: next.id, title: next.title, content: next.content, category: next.category, tags: next.tags } : { action: 'create', id: next.id, title: next.title, content: next.content, category: next.category, tags: next.tags }])
+      if (!result.verified) throw new Error(result.error || 'The memory operation could not be verified.')
       setEditing(false); setDraft(null); await refresh(next.id)
     } catch (cause) { setError(cause instanceof Error ? cause.message : 'Could not save memory note.') }
   }
 
   async function deleteSelected() {
     if (!selected || !window.confirm(`Delete “${selected.title}”? Existing wiki links will remain unresolved.`)) return
-    try { await indexedDbMemoryRepository.delete(selected.id); setSelectedId(''); await refresh('') } catch (cause) { setError(cause instanceof Error ? cause.message : 'Could not delete memory note.') }
+    try { const result = await indexedDbMemoryRepository.applyMutations([{ action: 'delete', id: selected.id }]); if (!result.verified) throw new Error(result.error || 'The memory operation could not be verified.'); setSelectedId(''); await refresh('') } catch (cause) { setError(cause instanceof Error ? cause.message : 'Could not delete memory note.') }
   }
 
   async function exportArchive() {

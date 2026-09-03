@@ -1,7 +1,7 @@
 import { GoogleGenAI, type FunctionCall, type FunctionDeclaration, type FunctionResponse } from '@google/genai'
 import { IMAGE_MODEL_NAME, MODEL_NAME, MUSIC_MODEL_NAME } from '../config'
 import type { MediaMetadata, MemoryNote, Message } from '../types'
-import { MEMORY_SOFT_LIMIT, normalizeTitle, replaceWikiLinkTitle, retrieveMemories, type MemoryRepository } from './memory'
+import { MEMORY_SOFT_LIMIT, normalizeTitle, replaceWikiLinkTitle, retrieveMemories, validateMemoryMutations, type MemoryMutation, type MemoryRepository, type VerifiedMemoryMutationResult } from './memory'
 
 const memoryTools: FunctionDeclaration[] = [
   {
@@ -15,21 +15,17 @@ const memoryTools: FunctionDeclaration[] = [
     parametersJsonSchema: { type: 'object', properties: { id: { type: 'string' } }, required: ['id'] }
   },
   {
-    name: 'create_memory',
-    description: 'Create a concise memory note for an explicit user request to remember something. Avoid duplicating an existing subject.',
+    name: 'apply_memory_changes',
+    description: 'Apply a complete memory mutation plan transactionally. The app validates and verifies every operation before any success can be reported.',
     parametersJsonSchema: {
       type: 'object',
-      properties: { title: { type: 'string' }, content: { type: 'string' }, category: { type: 'string' }, tags: { type: 'array', items: { type: 'string' } } },
-      required: ['title', 'content']
-    }
-  },
-  {
-    name: 'update_memory',
-    description: 'Update an existing memory with a concise structured patch. Prefer appendContent to preserve existing user-authored content.',
-    parametersJsonSchema: {
-      type: 'object',
-      properties: { id: { type: 'string' }, appendContent: { type: 'string' }, title: { type: 'string' }, category: { type: 'string' }, addTags: { type: 'array', items: { type: 'string' } } },
-      required: ['id']
+      properties: {
+        operations: {
+          type: 'array',
+          items: { type: 'object', properties: { action: { type: 'string', enum: ['create', 'update', 'delete'] }, id: { type: 'string' }, title: { type: 'string' }, content: { type: 'string' }, appendContent: { type: 'string' }, category: { type: 'string' }, tags: { type: 'array', items: { type: 'string' } } }, required: ['action'] }
+        }
+      },
+      required: ['operations']
     }
   }
 ]
@@ -65,6 +61,15 @@ export async function* streamReply(apiKey: string, messages: Message[], signal: 
 
 function asString(value: unknown): string { return typeof value === 'string' ? value.trim() : '' }
 function asTags(value: unknown): string[] { return Array.isArray(value) ? value.filter((tag): tag is string => typeof tag === 'string').map((tag) => tag.trim()).filter(Boolean) : [] }
+function parseMutation(value: unknown): MemoryMutation | null {
+  if (!value || typeof value !== 'object') return null
+  const raw = value as Record<string, unknown>
+  const action = asString(raw.action)
+  if (action === 'create') return { action, id: asString(raw.id) || undefined, title: asString(raw.title), content: typeof raw.content === 'string' ? raw.content : '', category: asString(raw.category) || undefined, tags: asTags(raw.tags) }
+  if (action === 'update') return { action, id: asString(raw.id), ...(raw.title !== undefined ? { title: asString(raw.title) } : {}), ...(raw.content !== undefined ? { content: typeof raw.content === 'string' ? raw.content : '' } : {}), ...(raw.appendContent !== undefined ? { appendContent: typeof raw.appendContent === 'string' ? raw.appendContent : '' } : {}), ...(raw.category !== undefined ? { category: asString(raw.category) } : {}), ...(raw.tags !== undefined ? { tags: asTags(raw.tags) } : {}) }
+  if (action === 'delete') return { action, id: asString(raw.id) }
+  return null
+}
 
 export interface ExplicitMemoryResult {
   usedNotes: MemoryNote[]
@@ -72,7 +77,7 @@ export interface ExplicitMemoryResult {
   summary: string
 }
 
-export async function handleExplicitMemory(apiKey: string, messages: Message[], repository: MemoryRepository, signal: AbortSignal): Promise<ExplicitMemoryResult> {
+export async function handleExplicitMemoryLegacy(apiKey: string, messages: Message[], repository: MemoryRepository, signal: AbortSignal): Promise<ExplicitMemoryResult> {
   const ai = new GoogleGenAI({ apiKey })
   const notes = await repository.list()
   const contents = messages.filter((message) => !message.mediaType || message.mediaType === 'text').map((message) => ({ role: message.role === 'assistant' ? 'model' : 'user', parts: [{ text: message.content }] }))
@@ -154,6 +159,76 @@ export async function handleExplicitMemory(apiKey: string, messages: Message[], 
     })
   }
   return { usedNotes: used, changed, summary }
+}
+
+export async function handleExplicitMemory(apiKey: string, messages: Message[], repository: MemoryRepository, signal: AbortSignal): Promise<ExplicitMemoryResult> {
+  const ai = new GoogleGenAI({ apiKey })
+  let notes = await repository.list()
+  const contents = messages.filter((message) => !message.mediaType || message.mediaType === 'text').map((message) => ({ role: message.role === 'assistant' ? 'model' : 'user', parts: [{ text: message.content }] }))
+  const used: MemoryNote[] = []
+  let mutationResult: VerifiedMemoryMutationResult | null = null
+  let response = await ai.models.generateContent({
+    model: MODEL_NAME,
+    contents,
+    config: {
+      systemInstruction: 'The user explicitly asked to change long-term memory. Search/read first when needed, then request exactly one complete apply_memory_changes operation containing every create, update, or delete required. The app will validate, execute transactionally, persist, and read back every operation. Never claim success from prose. Keep notes concise and never exceed 5000 characters.',
+      tools: [{ functionDeclarations: memoryTools }]
+    }
+  })
+
+  for (let round = 0; round < 3; round++) {
+    if (signal.aborted) throw new DOMException('Generation stopped.', 'AbortError')
+    const calls = response.functionCalls ?? []
+    if (!calls.length) break
+    const functionResponses: FunctionResponse[] = []
+    for (const call of calls as FunctionCall[]) {
+      const args = call.args ?? {}
+      let output: Record<string, unknown>
+      if (call.name === 'search_memory') {
+        const matches = retrieveMemories(asString(args.query), notes, 8)
+        for (const note of matches) if (!used.some((item) => item.id === note.id)) used.push(note)
+        output = { notes: matches.map((note) => ({ id: note.id, title: note.title, category: note.category, tags: note.tags, updatedAt: note.updatedAt })) }
+      } else if (call.name === 'read_memory') {
+        const note = await repository.get(asString(args.id))
+        if (note && !used.some((item) => item.id === note.id)) used.push(note)
+        output = note ? { note } : { error: 'Memory note not found.' }
+      } else if (call.name === 'apply_memory_changes') {
+        const rawOperations = Array.isArray(args.operations) ? args.operations : []
+        const parsed = rawOperations.map(parseMutation)
+        if (parsed.some((mutation) => !mutation)) {
+          mutationResult = { verified: false, created: [], updated: [], deleted: [], error: 'The proposed memory operation could not be parsed safely.' }
+        } else {
+          const validation = validateMemoryMutations(parsed as MemoryMutation[], notes)
+          mutationResult = validation.valid ? await repository.applyMutations(validation.mutations) : { verified: false, created: [], updated: [], deleted: [], error: validation.error }
+        }
+        output = {
+          verified: mutationResult.verified,
+          created: mutationResult.created.map((note) => ({ id: note.id, title: note.title })),
+          updated: mutationResult.updated.map((note) => ({ id: note.id, title: note.title })),
+          deleted: mutationResult.deleted,
+          error: mutationResult.error
+        }
+        if (mutationResult.verified) {
+          notes = await repository.list()
+          for (const note of [...mutationResult.created, ...mutationResult.updated]) if (!used.some((item) => item.id === note.id)) used.push(note)
+        }
+      } else output = { error: 'Unknown or unavailable memory action.' }
+      functionResponses.push({ name: call.name, id: call.id, response: output })
+    }
+    response = await ai.models.generateContent({
+      model: MODEL_NAME,
+      contents: [...contents, ...(response.candidates?.[0]?.content ? [response.candidates[0].content] : []), { role: 'user', parts: functionResponses.map((functionResponse) => ({ functionResponse })) }],
+      config: { systemInstruction: 'Use the verified memory action result as data. Do not invent, infer, or claim any mutation that is not listed under verified=true with exact created, updated, or deleted results.' }
+    })
+  }
+
+  if (mutationResult?.verified) {
+    const created = mutationResult.created.map((note) => note.title)
+    const updated = mutationResult.updated.map((note) => note.title)
+    const deleted = mutationResult.deleted.map((note) => note.title)
+    return { usedNotes: used, changed: true, summary: `Memory update verified. Created: ${created.length ? created.join(', ') : 'none'}. Updated: ${updated.length ? updated.join(', ') : 'none'}. Deleted: ${deleted.length ? deleted.join(', ') : 'none'}.` }
+  }
+  return { usedNotes: used, changed: false, summary: `No memory changes were saved. ${mutationResult?.error || 'The model did not request a verified memory action.'}` }
 }
 
 export async function streamGeminiResponse(apiKey: string, messages: Message[], signal: AbortSignal, onChunk: (text: string) => void, searchGrounding = false): Promise<void> {
